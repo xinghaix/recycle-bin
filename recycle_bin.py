@@ -6,6 +6,7 @@ import win32con
 import win32gui_struct
 import win32gui
 import datetime
+from threading import Timer
 
 import subprocess
 # noinspection PyUnresolvedReferences
@@ -74,11 +75,12 @@ class SysTrayIcon(object):
     QUIT = 'QUIT'
     SPECIAL_ACTIONS = [QUIT]
     FIRST_ID = 1314
-    lastClick = None
 
     def __init__(self, icon, hover_text, menu_options, on_quit=None,
                  default_menu_index=None,
                  window_class_name=None):
+        self.timer = None
+
         self.icon = icon
         self.hover_text = hover_text
         self.on_quit = on_quit
@@ -127,13 +129,8 @@ class SysTrayIcon(object):
 
         pos = win32gui.GetCursorPos()
         win32gui.SetForegroundWindow(self.hwnd)
-        win32gui.TrackPopupMenu(menu,
-                                win32con.TPM_LEFTALIGN,
-                                pos[0],
-                                pos[1],
-                                0,
-                                self.hwnd,
-                                None)
+        win32gui.TrackPopupMenu(menu, win32con.TPM_LEFTALIGN,
+                                pos[0], pos[1], 0, self.hwnd, None)
         win32gui.PostMessage(self.hwnd, win32con.WM_NULL, 0, 0)
 
     def destroy(self, hwnd, msg, wparam, lparam):
@@ -158,24 +155,19 @@ class SysTrayIcon(object):
         WM_MBUTTONUP
         WM_MBUTTONDBLCLK
         """
-        # 双击左键
+        # 双击左键. 每次双击事件的前面都有单击事件
         if lparam == win32con.WM_LBUTTONDBLCLK:
-            # self.execute_menu_option(self.default_menu_index + self.FIRST_ID)
+            if self.timer.isAlive():
+                self.timer.cancel()
             RecycleBin.empty()
         # 单击右键
         elif lparam == win32con.WM_RBUTTONUP:
             self.show_menu()
-        # 单击中键
+        # 单击左键
         elif lparam == win32con.WM_LBUTTONDOWN:
-            if self.lastClick is not None:
-                now = self.get_current_time()
-                interval = (now - self.lastClick).microseconds / 1200
-                print(interval)
-                if interval > 1000:
-                    RecycleBin.open()
-                    self.lastClick = now
-            else:
-                self.lastClick = self.get_current_time()
+            # 设置400ms的延迟方法，以便跟双击事件区分执行
+            self.timer = Timer(0.4, RecycleBin.open)
+            self.timer.start()
 
         return True
 
